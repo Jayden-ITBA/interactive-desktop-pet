@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { usePetBehavior } from './hooks/usePetBehavior';
 import { PetRenderer } from './components/PetRenderer';
 import { PetCreator } from './components/PetCreator';
+import { usePetStore } from './store/usePetStore';
 
 export default function App() {
   const [showCreator, setShowCreator] = useState(false);
