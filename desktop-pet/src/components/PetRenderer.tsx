@@ -1,102 +1,125 @@
-import React, { useCallback, useRef, useState, useMemo } from 'react';
-import { Graphics, Sprite } from '@pixi/react';
-import { usePetStore, PetState } from '../store/usePetStore';
-import * as PIXI from 'pixi.js';
+import { Application, extend, useTick } from '@pixi/react';
+import { Graphics, Sprite, Texture } from 'pixi.js';
+import { useCallback, useRef, useState, useEffect } from 'react';
+import { usePetStore } from '../store/usePetStore';
+import type { PetState } from '../store/usePetStore';
 
-export const PetRenderer: React.FC = () => {
+// Register PixiJS components for use in JSX
+extend({ Graphics, Sprite });
+
+// --- Pet color/shape config per state ---
+const STATE_CONFIG: Record<PetState, { color: number; scaleY?: number; yOffset?: number }> = {
+  IDLE:    { color: 0x3498db },
+  WALK:    { color: 0x2ecc71 },
+  RUN:     { color: 0x27ae60 },
+  JUMP:    { color: 0xe74c3c, yOffset: -30 },
+  HAPPY:   { color: 0xf1c40f },
+  ANGRY:   { color: 0xff4444 },
+  SLEEP:   { color: 0x95a5a6, scaleY: 0.6, yOffset: 20 },
+  PLAY:    { color: 0xe67e22 },
+  DRAGGED: { color: 0x9b59b6 },
+};
+
+// Inner PixiJS pet drawing component (must live inside <Application>)
+function PetGraphics() {
   const { currentState, position, setPosition, setPetState, activePetId } = usePetStore();
+  const graphicsRef = useRef<Graphics | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
   const petStartPos = useRef({ x: 0, y: 0 });
 
-  const drawPet = useCallback(
-    (g: PIXI.Graphics) => {
-      g.clear();
-      
-      // Different colors/shapes based on state
-      let color = 0x3498db; // IDLE - Blue
-      let width = 100;
-      let height = 100;
-      let yOffset = 0;
+  // Redraw whenever state changes
+  const drawPet = useCallback((g: Graphics) => {
+    g.clear();
+    const cfg = STATE_CONFIG[currentState] ?? STATE_CONFIG.IDLE;
+    const w = 100;
+    const h = 100 * (cfg.scaleY ?? 1);
+    const yo = cfg.yOffset ?? 0;
 
-      switch (currentState) {
-        case PetState.WALK:
-          color = 0x2ecc71; // Green
-          break;
-        case PetState.JUMP:
-          color = 0xe74c3c; // Red
-          yOffset = -50;
-          break;
-        case PetState.HAPPY:
-          color = 0xf1c40f; // Yellow
-          break;
-        case PetState.SLEEP:
-          color = 0x95a5a6; // Gray
-          height = 50;
-          yOffset = 50;
-          break;
-        case PetState.DRAGGED:
-          color = 0x9b59b6; // Purple
-          break;
-        default:
-          break;
-      }
+    // Body
+    g.roundRect(-w / 2, -h / 2 + yo, w, h, 18);
+    g.fill(cfg.color);
 
-      g.beginFill(color);
-      g.drawRoundedRect(-width / 2, -height / 2 + yOffset, width, height, 20);
-      g.endFill();
-
-      // Draw eyes
-      g.beginFill(0xffffff);
-      g.drawCircle(-20, -10 + yOffset, 10);
-      g.drawCircle(20, -10 + yOffset, 10);
-      g.endFill();
-
+    // Eyes (closed/squint when sleeping)
+    if (currentState === 'SLEEP') {
+      g.moveTo(-22, -8 + yo);
+      g.lineTo(-14, -8 + yo);
+      g.stroke({ color: 0x000000, width: 3 });
+      g.moveTo(14, -8 + yo);
+      g.lineTo(22, -8 + yo);
+      g.stroke({ color: 0x000000, width: 3 });
+    } else {
+      g.circle(-20, -10 + yo, 10);
+      g.fill(0xffffff);
+      g.circle(20, -10 + yo, 10);
+      g.fill(0xffffff);
       // Pupils
-      g.beginFill(0x000000);
-      g.drawCircle(-20, -10 + yOffset, 5);
-      g.drawCircle(20, -10 + yOffset, 5);
-      g.endFill();
-    },
-    [currentState]
-  );
-
-  const handlePointerDown = (e: PIXI.FederatedPointerEvent) => {
-    // Determine if it's a double click
-    if (e.detail === 2) {
-      setPetState(PetState.JUMP);
-      setTimeout(() => {
-        setPetState(PetState.HAPPY);
-      }, 500); // jump then happy
-      return;
+      const pupilX = currentState === 'HAPPY' ? 2 : 0;
+      g.circle(-20 + pupilX, -10 + yo, 5);
+      g.fill(0x111111);
+      g.circle(20 + pupilX, -10 + yo, 5);
+      g.fill(0x111111);
     }
 
+    // Smile when happy
+    if (currentState === 'HAPPY') {
+      g.arc(0, 5 + yo, 15, 0, Math.PI);
+      g.stroke({ color: 0x333333, width: 3 });
+    }
+
+    // Zzz when sleeping
+    if (currentState === 'SLEEP') {
+      g.fill(0x888888);
+    }
+  }, [currentState]);
+
+  // Use useTick for per-frame draw update
+  useTick(() => {
+    if (graphicsRef.current) {
+      graphicsRef.current.clear();
+      drawPet(graphicsRef.current);
+    }
+  });
+
+  const handlePointerDown = (e: { detail: number; globalX: number; globalY: number }) => {
+    if (e.detail === 2) {
+      // Double click
+      setPetState('JUMP');
+      setTimeout(() => setPetState('HAPPY'), 600);
+      setTimeout(() => setPetState('IDLE'), 2600);
+      return;
+    }
+    // Single click — start potential drag
     setIsDragging(true);
-    dragStartPos.current = { x: e.client.x, y: e.client.y };
+    dragStartPos.current = { x: e.globalX, y: e.globalY };
     petStartPos.current = { x: position.x, y: position.y };
-    setPetState(PetState.DRAGGED);
+    setPetState('DRAGGED');
   };
 
   const handlePointerUp = () => {
     if (isDragging) {
       setIsDragging(false);
-      setPetState(PetState.HAPPY); // Return to happy after drag
+      setPetState('HAPPY');
+      setTimeout(() => setPetState('IDLE'), 2000);
+    }
+    // Single click reaction (no significant movement)
+    else {
+      setPetState('HAPPY');
+      setTimeout(() => setPetState('IDLE'), 2000);
     }
   };
 
-  const handlePointerMove = (e: PIXI.FederatedPointerEvent) => {
+  const handlePointerMove = (e: { globalX: number; globalY: number }) => {
     if (isDragging) {
-      const dx = e.client.x - dragStartPos.current.x;
-      const dy = e.client.y - dragStartPos.current.y;
-      setPosition(petStartPos.current.x + dx, petStartPos.current.y + dy);
+      setPosition(
+        petStartPos.current.x + (e.globalX - dragStartPos.current.x),
+        petStartPos.current.y + (e.globalY - dragStartPos.current.y),
+      );
     }
   };
 
-  // Set ignore mouse events based on hover
   const handlePointerOver = () => {
-    if (window.electronAPI) {
-      window.electronAPI.setIgnoreMouseEvents(false);
-    }
+    if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false);
   };
 
   const handlePointerOut = () => {
@@ -105,58 +128,57 @@ export const PetRenderer: React.FC = () => {
     }
   };
 
-  // Determine image URL if custom pet
-  const customPetImageUrl = useMemo(() => {
-    if (!activePetId) return null;
-    const states = (window as any)[`pet_assets_${activePetId}`];
-    if (states && states[currentState]) {
-      return states[currentState];
-    }
-    // Fallback to IDLE if specific state not found
-    if (states && states[PetState.IDLE]) {
-      return states[PetState.IDLE];
-    }
-    return null;
-  }, [activePetId, currentState]);
+  // Get custom pet image if available
+  const customImageUrl = activePetId
+    ? ((window as Record<string, unknown>)[`pet_assets_${activePetId}`] as Record<string, string> | undefined)?.[currentState]
+      ?? ((window as Record<string, unknown>)[`pet_assets_${activePetId}`] as Record<string, string> | undefined)?.['IDLE']
+    : null;
 
-  const eventHandlers = {
-    interactive: true,
-    pointerdown: handlePointerDown,
-    pointerup: handlePointerUp,
-    pointerupoutside: handlePointerUp,
-    pointermove: handlePointerMove,
-    pointerover: handlePointerOver,
-    pointerout: handlePointerOut,
-    cursor: "pointer"
-  };
-
-  if (customPetImageUrl) {
+  if (customImageUrl) {
     return (
-      <Sprite
-        image={customPetImageUrl}
+      <pixiSprite
+        texture={Texture.from(customImageUrl)}
         x={position.x}
         y={position.y}
-        anchor={0.5} // Center the image
-        scale={0.5} // Scale down the uploaded image to fit as a pet
-        {...eventHandlers}
+        anchor={0.5}
+        scale={0.4}
+        eventMode="static"
+        onpointerdown={handlePointerDown}
+        onpointerup={handlePointerUp}
+        onpointermove={handlePointerMove}
+        onpointerover={handlePointerOver}
+        onpointerout={handlePointerOut}
+        cursor="pointer"
       />
     );
   }
 
   return (
-    <Graphics
-      draw={drawPet}
+    <pixiGraphics
+      ref={graphicsRef}
       x={position.x}
       y={position.y}
-      {...eventHandlers}
+      draw={drawPet}
+      eventMode="static"
+      onpointerdown={handlePointerDown}
+      onpointerup={handlePointerUp}
+      onpointermove={handlePointerMove}
+      onpointerover={handlePointerOver}
+      onpointerout={handlePointerOut}
+      cursor="pointer"
     />
   );
-};
+}
 
-declare global {
-  interface Window {
-    electronAPI?: {
-      setIgnoreMouseEvents: (ignore: boolean, options?: { forward: boolean }) => void;
-    };
-  }
+// Outer wrapper — renders the PixiJS Application canvas
+export function PetRenderer() {
+  return (
+    <Application
+      backgroundAlpha={0}
+      resizeTo={window}
+      style={{ position: 'fixed', inset: 0, pointerEvents: 'none' } as React.CSSProperties}
+    >
+      <PetGraphics />
+    </Application>
+  );
 }

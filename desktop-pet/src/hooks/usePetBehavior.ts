@@ -1,91 +1,110 @@
 import { useEffect, useRef } from 'react';
-import { usePetStore, PetState } from '../store/usePetStore';
+import { usePetStore } from '../store/usePetStore';
 
-export const usePetBehavior = () => {
+const WALK_SPEED = 2; // px per frame tick (~30fps)
+const BOUNDARY_PADDING = 80;
+
+export function usePetBehavior() {
   const { currentState, setPetState, position, setPosition, direction, setDirection } = usePetStore();
-  const stateTimerRef = useRef<number | null>(null);
-  const moveTimerRef = useRef<number | null>(null);
 
-  // Helper to clear timers
-  const clearTimers = () => {
-    if (stateTimerRef.current) window.clearTimeout(stateTimerRef.current);
-    if (moveTimerRef.current) window.clearInterval(moveTimerRef.current);
+  const stateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const moveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearAll = () => {
+    if (stateTimerRef.current) clearTimeout(stateTimerRef.current);
+    if (moveIntervalRef.current) clearInterval(moveIntervalRef.current);
+    stateTimerRef.current = null;
+    moveIntervalRef.current = null;
   };
 
   useEffect(() => {
-    // If the pet is being interacted with, we pause automatic behaviors.
-    if ([PetState.DRAGGED, PetState.HAPPY, PetState.JUMP, PetState.PLAY].includes(currentState)) {
-      clearTimers();
-      
-      // Auto-revert some interaction states back to IDLE after a delay
-      if (currentState === PetState.HAPPY || currentState === PetState.JUMP) {
-        stateTimerRef.current = window.setTimeout(() => {
-          setPetState(PetState.IDLE);
-        }, 2000);
-      }
-      return;
+    // --- Interaction states: auto-revert to IDLE ---
+    if (currentState === 'HAPPY' || currentState === 'JUMP') {
+      clearAll();
+      stateTimerRef.current = setTimeout(() => setPetState('IDLE'), 2000);
+      return clearAll;
     }
 
-    // Determine next state
-    const setNextState = () => {
-      clearTimers();
-      
-      let nextStateDelay = 2000;
-      
-      if (currentState === PetState.IDLE) {
-        // Idle for 2-6 seconds, then decide what to do
-        nextStateDelay = 2000 + Math.random() * 4000;
-        
+    if (currentState === 'DRAGGED') {
+      clearAll();
+      return clearAll;
+    }
+
+    // --- Autonomous behavior ---
+    if (currentState === 'IDLE') {
+      clearAll();
+      const idleDelay = 2000 + Math.random() * 4000;
+      stateTimerRef.current = setTimeout(() => {
         const r = Math.random();
-        if (r < 0.6) {
-          // 60% chance to walk
-          setPetState(PetState.WALK);
-          setDirection(Math.random() > 0.5 ? 'left' : 'right');
-        } else if (r < 0.8) {
-          // 20% chance to jump
-          setPetState(PetState.JUMP);
-        } else if (r < 0.95) {
-          // 15% chance to stay idle
-          setPetState(PetState.IDLE); // triggers re-run of effect
+        if (r < 0.55) {
+          setDirection(Math.random() > 0.5 ? 'right' : 'left');
+          setPetState('WALK');
+        } else if (r < 0.75) {
+          setPetState('JUMP');
+        } else if (r < 0.92) {
+          setPetState('IDLE'); // Stay idle — resets the timer
         } else {
-          // 5% chance to sleep
-          setPetState(PetState.SLEEP);
+          setPetState('SLEEP');
         }
-      } else if (currentState === PetState.WALK) {
-        // Walk for 2-5 seconds
-        nextStateDelay = 2000 + Math.random() * 3000;
-        
-        // Continuous movement
-        moveTimerRef.current = window.setInterval(() => {
-          setPosition(
-            position.x + (direction === 'right' ? 2 : -2),
-            position.y
-          );
-        }, 32); // ~30fps
-
-        // After walking, go back to IDLE
-        stateTimerRef.current = window.setTimeout(() => {
-          clearTimers();
-          setPetState(PetState.IDLE);
-        }, nextStateDelay);
-        return; // Early return to avoid setting timeout below
-      } else if (currentState === PetState.SLEEP) {
-        // Sleep for 10-20 seconds
-        nextStateDelay = 10000 + Math.random() * 10000;
-        stateTimerRef.current = window.setTimeout(() => {
-          setPetState(PetState.IDLE);
-        }, nextStateDelay);
-        return;
-      }
-      
-      stateTimerRef.current = window.setTimeout(setNextState, nextStateDelay);
-    };
-
-    // Kickoff the behavior loop
-    if (currentState === PetState.IDLE) {
-      setNextState();
+      }, idleDelay);
+      return clearAll;
     }
 
-    return clearTimers;
-  }, [currentState, direction, position.x, position.y, setPetState, setPosition, setDirection]);
-};
+    if (currentState === 'WALK') {
+      clearAll();
+      const walkDuration = 2000 + Math.random() * 3000;
+
+      // Movement tick
+      moveIntervalRef.current = setInterval(() => {
+        const screenW = window.screen.width;
+        setPosition(
+          // Read latest position from state via the store snapshot
+          Math.max(
+            BOUNDARY_PADDING,
+            Math.min(
+              screenW - BOUNDARY_PADDING,
+              usePetStore.getState().position.x + (usePetStore.getState().direction === 'right' ? WALK_SPEED : -WALK_SPEED),
+            ),
+          ),
+          usePetStore.getState().position.y,
+        );
+      }, 32);
+
+      stateTimerRef.current = setTimeout(() => {
+        clearAll();
+        setPetState('IDLE');
+      }, walkDuration);
+
+      return clearAll;
+    }
+
+    if (currentState === 'SLEEP') {
+      clearAll();
+      const sleepDuration = 8000 + Math.random() * 10000;
+      stateTimerRef.current = setTimeout(() => {
+        setPetState('IDLE');
+      }, sleepDuration);
+      return clearAll;
+    }
+
+    return clearAll;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentState]);
+
+  // Sync direction changes to movement without re-mounting the walk interval
+  useEffect(() => {
+    // Direction is handled inside the walk interval via store.getState(), so nothing extra needed
+  }, [direction]);
+
+  // Boundaries check — if pet walks off screen, flip direction
+  useEffect(() => {
+    const screenW = window.screen.width;
+    if (currentState === 'WALK') {
+      if (position.x <= BOUNDARY_PADDING && direction === 'left') {
+        setDirection('right');
+      } else if (position.x >= screenW - BOUNDARY_PADDING && direction === 'right') {
+        setDirection('left');
+      }
+    }
+  }, [position.x, currentState, direction, setDirection]);
+}

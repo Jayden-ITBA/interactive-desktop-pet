@@ -1,86 +1,60 @@
-import React, { useEffect, useState } from 'react';
-import { Stage } from '@pixi/react';
+import { useState, useEffect } from 'react';
 import { usePetBehavior } from './hooks/usePetBehavior';
 import { PetRenderer } from './components/PetRenderer';
 import { PetCreator } from './components/PetCreator';
 
-function App() {
+export default function App() {
   const [showCreator, setShowCreator] = useState(false);
 
-  // Start the behavior loop
   usePetBehavior();
 
   useEffect(() => {
-    // Initially tell main process to ignore mouse events (click-through)
-    if (window.electronAPI) {
-      window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
-    }
+    // Start fully click-through (only the pet catches events)
+    window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
   }, []);
 
-  const handleSettingsMouseEnter = () => {
-    if (window.electronAPI) {
-      window.electronAPI.setIgnoreMouseEvents(false);
-    }
-  };
-
-  const handleSettingsMouseLeave = () => {
-    // Only revert if creator is not open
-    if (window.electronAPI && !showCreator) {
-      window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
-    }
-  };
-
   return (
-    <div style={{ width: '100vw', height: '100vh', margin: 0, padding: 0, overflow: 'hidden' }}>
-      <Stage 
-        width={window.innerWidth} 
-        height={window.innerHeight} 
-        options={{ backgroundAlpha: 0, transparent: true }}
-      >
-        <PetRenderer />
-      </Stage>
+    <>
+      {/* PixiJS pet layer — fills entire screen, transparent */}
+      <PetRenderer />
 
-      {/* Overlay UI for Settings/Creation */}
+      {/* Overlay UI — only captures mouse when visible */}
       {!showCreator && (
         <button
-          onMouseEnter={handleSettingsMouseEnter}
-          onMouseLeave={handleSettingsMouseLeave}
+          id="open-creator-btn"
+          onMouseEnter={() => window.electronAPI?.setIgnoreMouseEvents(false)}
+          onMouseLeave={() => !showCreator && window.electronAPI?.setIgnoreMouseEvents(true, { forward: true })}
           onClick={() => setShowCreator(true)}
+          title="Add / Change Pet"
           style={{
-            position: 'absolute',
-            top: 20,
-            right: 20,
-            width: 40,
-            height: 40,
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            width: 48,
+            height: 48,
             borderRadius: '50%',
-            backgroundColor: '#2c3e50',
-            color: 'white',
+            background: 'linear-gradient(135deg, #667eea, #764ba2)',
+            color: '#fff',
             border: 'none',
+            fontSize: '1.6rem',
+            lineHeight: 1,
             cursor: 'pointer',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            fontSize: '1.2rem',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            zIndex: 9999
+            boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+            zIndex: 10000,
           }}
-          title="Add Pet"
         >
-          +
+          🐾
         </button>
       )}
 
       {showCreator && (
-        <PetCreator onClose={() => {
-          setShowCreator(false);
-          // Restore ignore events when closing
-          if (window.electronAPI) {
-            window.electronAPI.setIgnoreMouseEvents(true, { forward: true });
-          }
-        }} />
+        <PetCreator
+          onClose={() => {
+            setShowCreator(false);
+            window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
+          }}
+        />
       )}
-    </div>
+    </>
   );
 }
-
-export default App;
