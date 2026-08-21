@@ -45,6 +45,28 @@ function createWindow() {
     }
   });
 
+  // Native Hit Testing Polling
+  let hitAreas: { x: number; y: number; width: number; height: number }[] = [];
+  ipcMain.on('update-hit-areas', (event, areas) => {
+    hitAreas = areas;
+  });
+
+  setInterval(() => {
+    if (!win) return;
+    const point = screen.getCursorScreenPoint();
+    // Check if point is inside any hit area
+    const isHovering = hitAreas.some(
+      (area) =>
+        point.x >= area.x &&
+        point.x <= area.x + area.width &&
+        point.y >= area.y &&
+        point.y <= area.y + area.height
+    );
+    
+    // Dynamically toggle ignoreMouseEvents based on strict native screen coordinates
+    win.setIgnoreMouseEvents(!isHovering);
+  }, 32); // ~30fps poll
+
   ipcMain.handle('save-pet-assets', async (event, petId, states) => {
     try {
       const petDir = path.join(app.getPath('userData'), 'pets', petId);

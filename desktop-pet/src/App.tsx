@@ -11,21 +11,34 @@ export default function App() {
   usePetBehavior();
 
   useEffect(() => {
-    // Start fully click-through (only the pet catches events)
-    window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
-  }, []);
+    // We send the current hit areas to the main process for rock-solid OS polling
+    const btnSize = 60; // Approximate button size + padding
+    const screenW = window.innerWidth;
+    const screenH = window.innerHeight;
+    
+    let areas = [];
+    if (showCreator) {
+      // If creator is open, capture the center modal area
+      areas.push({ x: screenW / 2 - 300, y: screenH / 2 - 300, width: 600, height: 600 });
+    } else {
+      // Capture Pet bounding box
+      areas.push({ x: position.x - 60, y: position.y - 60, width: 120, height: 120 });
+      // Capture bottom-right button
+      areas.push({ x: screenW - btnSize - 20, y: screenH - btnSize - 20, width: btnSize, height: btnSize });
+    }
+    
+    window.electronAPI?.updateHitAreas?.(areas);
+  }, [position.x, position.y, showCreator]);
 
   return (
     <>
       {/* PixiJS pet layer — fills entire screen, transparent */}
       <PetRenderer />
 
-      {/* Overlay UI — only captures mouse when visible */}
+      {/* Overlay UI */}
       {!showCreator && (
         <button
           id="open-creator-btn"
-          onMouseEnter={() => window.electronAPI?.setIgnoreMouseEvents(false)}
-          onMouseLeave={() => !showCreator && window.electronAPI?.setIgnoreMouseEvents(true, { forward: true })}
           onClick={() => setShowCreator(true)}
           title="Add / Change Pet"
           style={{
@@ -51,10 +64,7 @@ export default function App() {
 
       {showCreator && (
         <PetCreator
-          onClose={() => {
-            setShowCreator(false);
-            window.electronAPI?.setIgnoreMouseEvents(true, { forward: true });
-          }}
+          onClose={() => setShowCreator(false)}
         />
       )}
       {/* DOM Overlay for reliable hit testing */}
@@ -65,11 +75,8 @@ export default function App() {
           top: position.y - 50,
           width: 100,
           height: 100,
-          background: 'rgba(255, 255, 255, 0.01)', // Crucial for Windows hit-testing
           cursor: 'pointer',
         }}
-        onMouseEnter={() => window.electronAPI?.setIgnoreMouseEvents(false)}
-        onMouseLeave={() => window.electronAPI?.setIgnoreMouseEvents(true, { forward: true })}
         onClick={(e) => {
           if (e.detail === 2) {
             usePetStore.getState().setPetState('JUMP');
