@@ -39,15 +39,22 @@ function createWindow() {
 		if (win) win.setIgnoreMouseEvents(ignore, options);
 	});
 	let hitAreas = [];
-	ipcMain.on("update-hit-areas", (event, areas) => {
+	ipcMain.on("update-hit-areas", (_event, areas) => {
 		hitAreas = areas;
 	});
-	setInterval(() => {
-		if (!win) return;
+	const pollInterval = setInterval(() => {
+		if (!win || win.isDestroyed()) {
+			clearInterval(pollInterval);
+			return;
+		}
 		const point = screen.getCursorScreenPoint();
 		const isHovering = hitAreas.some((area) => point.x >= area.x && point.x <= area.x + area.width && point.y >= area.y && point.y <= area.y + area.height);
 		win.setIgnoreMouseEvents(!isHovering);
 	}, 32);
+	win.on("closed", () => {
+		clearInterval(pollInterval);
+		win = null;
+	});
 	ipcMain.handle("save-pet-assets", async (event, petId, states) => {
 		try {
 			const petDir = path.join(app.getPath("userData"), "pets", petId);

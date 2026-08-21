@@ -47,14 +47,16 @@ function createWindow() {
 
   // Native Hit Testing Polling
   let hitAreas: { x: number; y: number; width: number; height: number }[] = [];
-  ipcMain.on('update-hit-areas', (event, areas) => {
+  ipcMain.on('update-hit-areas', (_event, areas) => {
     hitAreas = areas;
   });
 
-  setInterval(() => {
-    if (!win) return;
+  const pollInterval = setInterval(() => {
+    if (!win || win.isDestroyed()) {
+      clearInterval(pollInterval);
+      return;
+    }
     const point = screen.getCursorScreenPoint();
-    // Check if point is inside any hit area
     const isHovering = hitAreas.some(
       (area) =>
         point.x >= area.x &&
@@ -62,10 +64,14 @@ function createWindow() {
         point.y >= area.y &&
         point.y <= area.y + area.height
     );
-    
-    // Dynamically toggle ignoreMouseEvents based on strict native screen coordinates
     win.setIgnoreMouseEvents(!isHovering);
-  }, 32); // ~30fps poll
+  }, 32);
+
+  // Clean up when window is closed
+  win.on('closed', () => {
+    clearInterval(pollInterval);
+    win = null;
+  });
 
   ipcMain.handle('save-pet-assets', async (event, petId, states) => {
     try {
