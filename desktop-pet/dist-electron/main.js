@@ -1,6 +1,7 @@
 import { BrowserWindow, app, ipcMain } from "electron";
 import { fileURLToPath } from "url";
 import path from "path";
+import fs from "fs/promises";
 //#region electron/main.ts
 var __dirname = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(__dirname, "..");
@@ -29,6 +30,24 @@ function createWindow() {
 	ipcMain.on("set-ignore-mouse-events", (event, ignore, options) => {
 		const win = BrowserWindow.fromWebContents(event.sender);
 		if (win) win.setIgnoreMouseEvents(ignore, options);
+	});
+	ipcMain.handle("save-pet-assets", async (event, petId, states) => {
+		try {
+			const petDir = path.join(app.getPath("userData"), "pets", petId);
+			await fs.mkdir(petDir, { recursive: true });
+			for (const [state, dataUrl] of Object.entries(states)) {
+				const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+				if (matches && matches.length === 3) {
+					const buffer = Buffer.from(matches[2], "base64");
+					const ext = matches[1] === "image/jpeg" ? "jpg" : matches[1] === "image/webp" ? "webp" : "png";
+					await fs.writeFile(path.join(petDir, `${state}.${ext}`), buffer);
+				}
+			}
+			return true;
+		} catch (e) {
+			console.error("Failed to save pet assets", e);
+			return false;
+		}
 	});
 	if (VITE_DEV_SERVER_URL) win.loadURL(VITE_DEV_SERVER_URL);
 	else win.loadFile(path.join(RENDERER_DIST, "index.html"));

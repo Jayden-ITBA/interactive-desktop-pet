@@ -1,10 +1,10 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { Graphics } from '@pixi/react';
+import React, { useCallback, useRef, useState, useMemo } from 'react';
+import { Graphics, Sprite } from '@pixi/react';
 import { usePetStore, PetState } from '../store/usePetStore';
 import * as PIXI from 'pixi.js';
 
 export const PetRenderer: React.FC = () => {
-  const { currentState, position, setPosition, setPetState } = usePetStore();
+  const { currentState, position, setPosition, setPetState, activePetId } = usePetStore();
   const [isDragging, setIsDragging] = useState(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
   const petStartPos = useRef({ x: 0, y: 0 });
@@ -105,19 +105,50 @@ export const PetRenderer: React.FC = () => {
     }
   };
 
+  // Determine image URL if custom pet
+  const customPetImageUrl = useMemo(() => {
+    if (!activePetId) return null;
+    const states = (window as any)[`pet_assets_${activePetId}`];
+    if (states && states[currentState]) {
+      return states[currentState];
+    }
+    // Fallback to IDLE if specific state not found
+    if (states && states[PetState.IDLE]) {
+      return states[PetState.IDLE];
+    }
+    return null;
+  }, [activePetId, currentState]);
+
+  const eventHandlers = {
+    interactive: true,
+    pointerdown: handlePointerDown,
+    pointerup: handlePointerUp,
+    pointerupoutside: handlePointerUp,
+    pointermove: handlePointerMove,
+    pointerover: handlePointerOver,
+    pointerout: handlePointerOut,
+    cursor: "pointer"
+  };
+
+  if (customPetImageUrl) {
+    return (
+      <Sprite
+        image={customPetImageUrl}
+        x={position.x}
+        y={position.y}
+        anchor={0.5} // Center the image
+        scale={0.5} // Scale down the uploaded image to fit as a pet
+        {...eventHandlers}
+      />
+    );
+  }
+
   return (
     <Graphics
       draw={drawPet}
       x={position.x}
       y={position.y}
-      interactive={true}
-      pointerdown={handlePointerDown}
-      pointerup={handlePointerUp}
-      pointerupoutside={handlePointerUp}
-      pointermove={handlePointerMove}
-      pointerover={handlePointerOver}
-      pointerout={handlePointerOut}
-      cursor="pointer"
+      {...eventHandlers}
     />
   );
 };
