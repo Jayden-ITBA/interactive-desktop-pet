@@ -6,6 +6,7 @@ import { usePetStore } from './store/usePetStore';
 
 export default function App() {
   const [showCreator, setShowCreator] = useState(false);
+  const { position, setPetState, setPosition } = usePetStore();
 
   usePetBehavior();
 
@@ -60,12 +61,11 @@ export default function App() {
       <div
         style={{
           position: 'fixed',
-          left: usePetStore.getState().position.x - 50,
-          top: usePetStore.getState().position.y - 50,
+          left: position.x - 50,
+          top: position.y - 50,
           width: 100,
           height: 100,
-          // Un-comment background for debugging if needed:
-          // background: 'rgba(255,0,0,0.5)',
+          background: 'rgba(255, 255, 255, 0.01)', // Crucial for Windows hit-testing
           cursor: 'pointer',
         }}
         onMouseEnter={() => window.electronAPI?.setIgnoreMouseEvents(false)}

@@ -1,7 +1,11 @@
+import { createRequire } from "node:module";
 import { BrowserWindow, app, ipcMain } from "electron";
 import { fileURLToPath } from "url";
 import path from "path";
 import fs from "fs/promises";
+//#region \0rolldown/runtime.js
+var __require = /* #__PURE__ */ (() => createRequire(import.meta.url))();
+//#endregion
 //#region electron/main.ts
 var __dirname = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(__dirname, "..");
@@ -11,21 +15,24 @@ var RENDERER_DIST = path.join(process.env.APP_ROOT, "dist");
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, "public") : RENDERER_DIST;
 var win;
 function createWindow() {
+	const { screen } = __require("electron");
+	const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 	win = new BrowserWindow({
-		width: 800,
-		height: 600,
+		width,
+		height,
+		x: 0,
+		y: 0,
 		transparent: true,
 		frame: false,
 		alwaysOnTop: true,
 		hasShadow: false,
-		resizable: true,
+		resizable: false,
 		webPreferences: {
 			preload: path.join(__dirname, "preload.js"),
 			contextIsolation: true,
 			nodeIntegration: false
 		}
 	});
-	win.maximize();
 	win.setIgnoreMouseEvents(true, { forward: true });
 	ipcMain.on("set-ignore-mouse-events", (event, ignore, options) => {
 		const win = BrowserWindow.fromWebContents(event.sender);
