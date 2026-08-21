@@ -55,6 +55,56 @@ export default function App() {
           }}
         />
       )}
+      {/* DOM Overlay for reliable hit testing */}
+      <div
+        style={{
+          position: 'fixed',
+          left: usePetStore.getState().position.x - 50,
+          top: usePetStore.getState().position.y - 50,
+          width: 100,
+          height: 100,
+          // Un-comment background for debugging if needed:
+          // background: 'rgba(255,0,0,0.5)',
+          cursor: 'pointer',
+        }}
+        onMouseEnter={() => window.electronAPI?.setIgnoreMouseEvents(false)}
+        onMouseLeave={() => window.electronAPI?.setIgnoreMouseEvents(true, { forward: true })}
+        onClick={(e) => {
+          if (e.detail === 2) {
+            usePetStore.getState().setPetState('JUMP');
+            setTimeout(() => usePetStore.getState().setPetState('HAPPY'), 600);
+            setTimeout(() => usePetStore.getState().setPetState('IDLE'), 2600);
+          } else {
+            usePetStore.getState().setPetState('HAPPY');
+            setTimeout(() => usePetStore.getState().setPetState('IDLE'), 2000);
+          }
+        }}
+        // Simple drag via DOM for MVP reliability
+        onMouseDown={(e) => {
+          const startX = e.clientX;
+          const startY = e.clientY;
+          const startPosX = usePetStore.getState().position.x;
+          const startPosY = usePetStore.getState().position.y;
+          usePetStore.getState().setPetState('DRAGGED');
+
+          const onMouseMove = (moveEvent: MouseEvent) => {
+            usePetStore.getState().setPosition(
+              startPosX + (moveEvent.clientX - startX),
+              startPosY + (moveEvent.clientY - startY)
+            );
+          };
+
+          const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            usePetStore.getState().setPetState('HAPPY');
+            setTimeout(() => usePetStore.getState().setPetState('IDLE'), 2000);
+          };
+
+          document.addEventListener('mousemove', onMouseMove);
+          document.addEventListener('mouseup', onMouseUp);
+        }}
+      />
     </>
   );
 }
