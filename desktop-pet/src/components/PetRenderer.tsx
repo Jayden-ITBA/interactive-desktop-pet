@@ -130,8 +130,8 @@ function PetGraphics() {
 
   // Get custom pet image if available
   const customImageUrl = activePetId
-    ? ((window as Record<string, unknown>)[`pet_assets_${activePetId}`] as Record<string, string> | undefined)?.[currentState]
-      ?? ((window as Record<string, unknown>)[`pet_assets_${activePetId}`] as Record<string, string> | undefined)?.['IDLE']
+    ? ((window as unknown as Record<string, unknown>)[`pet_assets_${activePetId}`] as Record<string, string> | undefined)?.[currentState]
+      ?? ((window as unknown as Record<string, unknown>)[`pet_assets_${activePetId}`] as Record<string, string> | undefined)?.['IDLE']
     : null;
 
   if (customImageUrl) {
@@ -143,11 +143,11 @@ function PetGraphics() {
         anchor={0.5}
         scale={0.4}
         eventMode="static"
-        onpointerdown={handlePointerDown}
-        onpointerup={handlePointerUp}
-        onpointermove={handlePointerMove}
-        onpointerover={handlePointerOver}
-        onpointerout={handlePointerOut}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerMove={handlePointerMove}
+        onPointerOver={handlePointerOver}
+        onPointerOut={handlePointerOut}
         cursor="pointer"
       />
     );
@@ -160,11 +160,11 @@ function PetGraphics() {
       y={position.y}
       draw={drawPet}
       eventMode="static"
-      onpointerdown={handlePointerDown}
-      onpointerup={handlePointerUp}
-      onpointermove={handlePointerMove}
-      onpointerover={handlePointerOver}
-      onpointerout={handlePointerOut}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerMove={handlePointerMove}
+      onPointerOver={handlePointerOver}
+      onPointerOut={handlePointerOut}
       cursor="pointer"
     />
   );
@@ -173,12 +173,13 @@ function PetGraphics() {
 // Outer wrapper — renders the PixiJS Application canvas
 export function PetRenderer() {
   return (
-    <Application
-      backgroundAlpha={0}
-      resizeTo={window}
-      style={{ position: 'fixed', inset: 0, pointerEvents: 'none' } as React.CSSProperties}
-    >
-      <PetGraphics />
-    </Application>
+    <div style={{ position: 'fixed', inset: 0 }}>
+      <Application
+        backgroundAlpha={0}
+        resizeTo={window}
+      >
+        <PetGraphics />
+      </Application>
+    </div>
   );
 }
